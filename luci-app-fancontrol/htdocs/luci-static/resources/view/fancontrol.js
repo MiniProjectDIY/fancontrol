@@ -1,49 +1,54 @@
 'use strict';
 'require view';
-'require fs';
 'require form';
 'require uci';
-'require tools.widgets as widgets';
 
 return view.extend({
-	load: function () {
-		return Promise.all([
-			uci.load('fancontrol')
-		]);
+	// 仅加载配置文件
+	load: function() {
+		return uci.load('fancontrol');
 	},
-	render: async function (data) {
+
+	render: function(data) {
 		var m, s, o;
 
-		m = new form.Map('fancontrol', _('Fan General Control'));
+		m = new form.Map('fancontrol', _('Fan General Control'), 
+			_('Configure the fan control script settings. Temperature readings are handled by the background service.'));
+
 		s = m.section(form.TypedSection, 'fancontrol', _('Settings'));
 		s.anonymous = true;
 
-		o = s.option(form.Flag, 'enabled', _('Enabled'), _('Enabled'));
+		// 启用开关
+		o = s.option(form.Flag, 'enabled', _('Enabled'));
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'thermal_file', _('Thermal File'), _('Thermal File'));
-		o.placeholder = '/sys/devices/virtual/thermal/thermal_zone0/temp';
-		var temp_div = uci.get('fancontrol', 'settings', 'temp_div');
-		var temp = parseInt(await fs.read_direct(uci.get('fancontrol', 'settings', 'thermal_file')));
-		if (temp_div > 0 && temp > 0) {
-			o.description = _('Current temperature:') + ' <b>' + (temp / temp_div) + '°C</b>';
-		} else {
-			o.description = _('Thermal File');
-		}
+		// 温度节点路径
+		o = s.option(form.Value, 'thermal_file', _('Thermal File Path'));
+		o.placeholder = '/sys/class/thermal/thermal_zone0/temp';
+		o.datatype = 'file';
 
-		o = s.option(form.Value, 'fan_file', _('Fan File'), _('Fan Speed File'));
-		o.placeholder = '/sys/devices/virtual/thermal/cooling_device0/cur_state';
-		var speed = parseInt(await fs.read_direct(uci.get('fancontrol', 'settings', 'fan_file')));
-		o.description = _('Current speed:') + ' <b>' + (speed) + '</b>';
+		// 风扇控制节点路径
+		o = s.option(form.Value, 'fan_file', _('Fan Control File Path'));
+		o.placeholder = '/sys/class/thermal/cooling_device0/cur_state';
+		o.datatype = 'file';
 
-		o = s.option(form.Value, 'start_speed', _('Initial Speed'), _('Please enter the initial speed for fan startup.'));
+		// 运行参数
+		o = s.option(form.Value, 'start_temp', _('Start Temperature (°C)'));
+		o.datatype = 'uinteger';
+		o.placeholder = '45';
+
+		o = s.option(form.Value, 'start_speed', _('Initial PWM Speed'));
+		o.datatype = 'range(0, 255)';
 		o.placeholder = '35';
 
-		o = s.option(form.Value, 'max_speed', _('Max Speed'), _('Please enter maximum fan speed.'));
+		o = s.option(form.Value, 'max_speed', _('Maximum PWM Speed'));
+		o.datatype = 'range(0, 255)';
 		o.placeholder = '255';
 
-		o = s.option(form.Value, 'start_temp', _('Start Temperature'), _('Please enter the fan start temperature.'));
-		o.placeholder = '45';
+		o = s.option(form.Value, 'temp_div', _('Temperature Divisor'));
+		o.datatype = 'uinteger';
+		o.placeholder = '1000';
+		o.description = _('Divider to convert raw value to Celsius (e.g., 1000 for millidegrees).');
 
 		return m.render();
 	}
